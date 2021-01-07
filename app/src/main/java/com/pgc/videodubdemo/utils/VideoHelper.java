@@ -22,7 +22,6 @@ public class VideoHelper {
     private static final String PCM=".pcm";
     //类型
     private static final String mime = "audio/mp4a-latm";
-
     private Handler handler;
 
     public VideoHelper(Handler handler) {
