@@ -1,4 +1,5 @@
 <resources>
     <string name="app_name">VideoDubDemo</string>
     <string name="start">开始</string>
+    <string name="start_cut_audio">请点击开始截取音频</string>
 </resources>

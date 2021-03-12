@@ -54,7 +54,7 @@ public class MainActivity extends AppCompatActivity {
     private Handler handler = new Handler(Looper.getMainLooper()) {
         @Override
         public void handleMessage(@NonNull Message msg) {
-            StringBuilder stringBuilder=new StringBuilder(stateTv.getText());
+            StringBuilder stringBuilder=new StringBuilder();
             switch (msg.what) {
                 case 0:
                     stringBuilder.append("解析错误");
