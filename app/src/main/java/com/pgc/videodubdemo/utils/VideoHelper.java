@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * @author Created by PengGuiChu on 2021/1/6 11:57.
@@ -34,8 +35,9 @@ public class VideoHelper {
      * @param decodePath 需要解码的MP4文件路径
      * @param audioName  音频名字
      * @param isWav 是否是wav格式   wav可以播放  pcm无法直接播放(裁剪格式)
+     * @param times 音频需要截取的时间片段
      */
-    public void initDecodeVideoToAudio(String dirPath,String decodePath, String audioName,boolean isWav) throws IOException {
+    public void initDecodeVideoToAudio(String dirPath,String decodePath, String audioName,boolean isWav,long[] times) throws IOException {
         if (handler!=null){
             handler.sendEmptyMessage(3);
         }
@@ -86,15 +88,45 @@ public class VideoHelper {
         MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
         ByteArrayOutputStream byteArrayOutputStream=new ByteArrayOutputStream();
         decode(mMediaDecode,inputBuffers,mediaExtractor,outputBuffers,bufferInfo,byteArrayOutputStream);
-        byte[] bytes=byteArrayOutputStream.toByteArray();
-        FileOutputStream fileOutputStream=new FileOutputStream(new File(dirPath,audioName+suffixName));
-        if (isWav){
-            convertPcmToWav(fileOutputStream,bytes,KEY_SAMPLE_RATE,KEY_CHANNEL_COUNT,bitNumber);
-        }else{
-            fileOutputStream.write(bytes);
-        }
-        fileOutputStream.close();
+        byte[] bytes=byteArrayOutputStream.toByteArray();//读取整个音频的数据
         byteArrayOutputStream.close();
+        if (bytes.length==0){
+            if (handler!=null){
+                handler.sendEmptyMessage(0);
+            }
+            return;
+        }
+        for (int i=0;i<times.length-1;i++){
+            long startTime=times[i];
+            long endTime=times[i+1];
+            //获取数据开始数据索引
+            int startPosition=getPositionFromWave(startTime,KEY_SAMPLE_RATE,KEY_CHANNEL_COUNT,bitNumber);
+            //获取数据结束数据索引
+            int endPosition=endTime==-1?bytes.length-1:getPositionFromWave(endTime,KEY_SAMPLE_RATE,KEY_CHANNEL_COUNT,bitNumber);
+            if (endPosition>bytes.length-1){
+                endPosition=bytes.length-1;
+            }
+            if (startPosition==endPosition-1||startPosition>=endPosition){
+                break;
+            }
+            byte[]  cutBytes;//= Arrays.copyOfRange(bytes,startPosition,endPosition+1);
+            if (KEY_CHANNEL_COUNT==1){//如果是单通道需要转为双通道
+                cutBytes= byteMerger(Arrays.copyOfRange(bytes,startPosition,endPosition+1));
+            }else{
+                cutBytes= Arrays.copyOfRange(bytes,startPosition,endPosition+1);
+            }
+            File cutFile=new File(dirPath,audioName+"_"+i+suffixName);
+            if (!cutFile.exists()){
+                cutFile.createNewFile();
+                FileOutputStream cutFileOutputStream=new FileOutputStream(cutFile);
+                if (isWav){
+                    convertPcmToWav(cutFileOutputStream,cutBytes,KEY_SAMPLE_RATE,KEY_CHANNEL_COUNT,bitNumber);
+                }else{
+                    cutFileOutputStream.write(cutBytes);
+                    cutFileOutputStream.close();
+                }
+            }
+        }
         if (handler!=null){
             handler.sendEmptyMessage(2);
         }
@@ -290,5 +322,35 @@ public class VideoHelper {
         header[42] = (byte) ((totalAudioLen >> 16) & 0xff);
         header[43] = (byte) ((totalAudioLen >> 24) & 0xff);
         out.write(header, 0, 44);
+    }
+
+    /**
+     * 获取wave文件某个时间对应的数据位置
+     * @param time 时间  毫秒
+     * @param sampleRate 采样率
+     * @param channels 声道数
+     * @param bitNum 采样位数
+     * @return
+     */
+    private static int getPositionFromWave(long time, int sampleRate, int channels, int bitNum) {
+        int byteNum = bitNum / 8;
+        int position = (int) (time * sampleRate * channels * byteNum/1000);
+        //这里要特别注意，要取整（byteNum * channels）的倍数
+        position = position / (byteNum * channels) * (byteNum * channels);
+        return position;
+    }
+
+    private   byte[] byteMerger(byte[] byte_1){
+        byte[] byte_2 = new byte[byte_1.length*2];
+        for (int i = 0; i < byte_1.length; i++) {
+            if(i%2 == 0){
+                byte_2[2*i] =  byte_1[i];
+                byte_2[2*i+1] =  byte_1[i+1];
+            }else{
+                byte_2[2*i] =  byte_1[i-1];
+                byte_2[2*i+1] =  byte_1[i];
+            }
+        }
+        return byte_2;
     }
 }
